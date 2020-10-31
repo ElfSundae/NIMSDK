@@ -20,6 +20,7 @@ class UpdatePodspec
     {
         $spec = $this->fetchPodspec();
         $spec = json_decode($spec, true);
+        $spec['version'] = $this->newVersion;
         $spec = $this->replacePodSource($spec);
         $spec = $this->addXcodeConfig($spec);
 
