@@ -1,0 +1,2 @@
+# NIMSDK
+Unofficial NIMSDK podspec
