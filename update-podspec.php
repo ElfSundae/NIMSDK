@@ -73,7 +73,7 @@ class UpdatePodspec
     }
 
     /**
-     * Replace the `http` protocol of `source` to `https` in the podspec.
+     * Replace the `http` protocol of `source` to `https`.
      *
      * - WARN  | http: The URL (`http://yx-web.nos.netease.com/package/1603355217/NIM_iOS_SDK_IM_v8.0.1.zip`) doesn't use the encrypted HTTPS protocol. It is crucial for Pods to be transferred over a secure protocol to protect your users from man-in-the-middle attacks. This will be an error in future releases. Please update the URL to use https.
      *
@@ -103,7 +103,8 @@ class UpdatePodspec
      */
     protected function addXcodeConfig($spec)
     {
-        $spec['user_target_xcconfig'] = $spec['pod_target_xcconfig']
+        $spec['user_target_xcconfig']
+            = $spec['pod_target_xcconfig']
             = ['EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64'];
 
         return $spec;
