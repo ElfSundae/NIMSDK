@@ -1,5 +1,7 @@
 # NIMSDK
 
+[![Build status](https://github.com/ElfSundae/NIMSDK/workflows/Build/badge.svg)](https://github.com/ElfSundae/NIMSDK/actions?query=workflow%3ABuild)
+
 Unofficial NIMSDK podspec to fix integration issues and build errors.
 
 - Replaced the `http` protocol of `source` to `https`, to fix a installation warning: _'NIMSDK_LITE' uses the unencrypted 'http' protocol to transfer the Pod._
