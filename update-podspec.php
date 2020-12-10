@@ -123,7 +123,7 @@ class UpdatePodspec
     }
 }
 
-$version = '8.1.2';
+$version = '8.1.3';
 $newVersion = null;
 (new UpdatePodspec('NIMSDK', $version, $newVersion))->update();
 (new UpdatePodspec('NIMSDK_LITE', $version, $newVersion))->update();

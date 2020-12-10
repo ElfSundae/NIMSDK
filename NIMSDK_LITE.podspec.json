@@ -1,6 +1,6 @@
 {
   "name": "NIMSDK_LITE",
-  "version": "8.1.200",
+  "version": "8.1.300",
   "summary": "Netease IM Lite SDK",
   "homepage": "http://netease.im",
   "license": {
@@ -9,7 +9,7 @@
   },
   "authors": "Netease IM Team",
   "source": {
-    "http": "https://yx-web-nosdn.netease.im/package/1606480226/NIM_iOS_SDK_IM_v8.1.2.zip?download=NIM_iOS_SDK_IM_v8.1.2.zip"
+    "http": "https://yx-web-nosdn.netease.im/package/1607482234/NIM_iOS_SDK_IM_v8.1.3.zip?download=NIM_iOS_SDK_IM_v8.1.3.zip"
   },
   "platforms": {
     "ios": "9.0"
