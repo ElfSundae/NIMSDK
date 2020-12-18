@@ -1,9 +1,25 @@
 #!/usr/bin/env php
 <?php
 
-$version = '8.1.3';
-(new UpdatePodspec('NIMSDK', $version))->update();
-(new UpdatePodspec('NIMSDK_LITE', $version))->update();
+$version = null;
+$newVersion = null;
+
+if ($argc > 1) {
+    if (preg_match('#^\d+\.\d+\.\d+$#', $argv[1])) {
+        $version = $argv[1];
+    } else {
+        echo "Usage: {$argv[0]} [pod version] [new version]".PHP_EOL;
+        exit(1);
+    }
+
+    if ($argc > 2) {
+        $newVersion = $argv[2];
+    }
+}
+
+foreach (['NIMSDK', 'NIMSDK_LITE'] as $name) {
+    (new UpdatePodspec($name, $version, $newVersion))->update();
+}
 
 class UpdatePodspec
 {
@@ -15,13 +31,15 @@ class UpdatePodspec
     public function __construct($name, $version, $newVersion = null)
     {
         $this->name = $name;
-        $this->version = $version;
-        $this->newVersion = $newVersion ?: $this->getNewVersion($version);
+        $this->version = $version ?: $this->fetchPodLatestVersion($this->name);
+        $this->newVersion = $newVersion ?: $this->patchedVersion($this->version);
         $this->filename = $this->name.'.podspec.json';
     }
 
     public function update()
     {
+        echo "Updating {$this->name} {$this->version} -> {$this->newVersion}".PHP_EOL;
+
         $spec = $this->fetchPodspec();
         $spec = json_decode($spec, true);
         $spec['version'] = $this->newVersion;
@@ -32,7 +50,30 @@ class UpdatePodspec
         file_put_contents(__DIR__.'/'.$this->filename, $json.PHP_EOL);
     }
 
-    protected function getNewVersion($version)
+    protected function fetchPodLatestVersion($name)
+    {
+        echo "Fetching the latest version for pod $name...";
+
+        $versionsURL = 'https://cdn.cocoapods.org/all_pods_versions_'
+            .$this->getPodSpecShard($name, '_').'.txt';
+        $versions = $this->downloadContent($versionsURL);
+        if (! preg_match('#^'.$name.'(/.+)?/([\d.]+)$#m', $versions, $matches)) {
+            echo 'error'.PHP_EOL;
+            exit(2);
+        }
+        $version = array_pop($matches);
+
+        echo $version.PHP_EOL;
+
+        return $version;
+    }
+
+    protected function getPodSpecShard($name, $seprator = '/')
+    {
+        return implode($seprator, str_split(substr(md5($name), 0, 3)));
+    }
+
+    protected function patchedVersion($version)
     {
         $parts = explode('.', $version);
         $lastNumber = array_pop($parts);
@@ -47,15 +88,16 @@ class UpdatePodspec
 
     protected function fetchPodspec()
     {
-        $dir = implode('/', str_split(substr(md5($this->name), 0, 3)));
         $url = 'https://raw.githubusercontent.com/CocoaPods/Specs/master/Specs/'
-            .$dir."/{$this->name}/{$this->version}/{$this->filename}";
+            .$this->getPodSpecShard($this->name, '/')
+            .'/'.implode('/', [$this->name, $this->version, $this->filename]);
 
         if ($data = $this->downloadContent($url)) {
             return $data;
         }
 
-        exit("Failed to fetch podspec from $url".PHP_EOL);
+        echo "Failed to fetch podspec from $url".PHP_EOL;
+        exit(3);
     }
 
     protected function downloadContent($url)
