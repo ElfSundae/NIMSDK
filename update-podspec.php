@@ -1,6 +1,10 @@
 #!/usr/bin/env php
 <?php
 
+$version = '8.1.3';
+(new UpdatePodspec('NIMSDK', $version))->update();
+(new UpdatePodspec('NIMSDK_LITE', $version))->update();
+
 class UpdatePodspec
 {
     protected $name;
@@ -122,8 +126,3 @@ class UpdatePodspec
         }, $json);
     }
 }
-
-$version = '8.1.3';
-$newVersion = null;
-(new UpdatePodspec('NIMSDK', $version, $newVersion))->update();
-(new UpdatePodspec('NIMSDK_LITE', $version, $newVersion))->update();
