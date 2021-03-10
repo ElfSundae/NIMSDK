@@ -152,7 +152,7 @@ class UpdatePodspec
     {
         $spec['user_target_xcconfig']
             = $spec['pod_target_xcconfig']
-            = ['EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64'];
+            = ['EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 arm64'];
 
         return $spec;
     }

@@ -1,6 +1,6 @@
 {
   "name": "NIMSDK_LITE",
-  "version": "8.3.001",
+  "version": "8.3.002",
   "summary": "Netease IM Lite SDK",
   "homepage": "http://netease.im",
   "license": {
@@ -29,9 +29,9 @@
     "c++"
   ],
   "pod_target_xcconfig": {
-    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "arm64"
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "i386 arm64"
   },
   "user_target_xcconfig": {
-    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "arm64"
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "i386 arm64"
   }
 }

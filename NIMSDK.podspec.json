@@ -1,6 +1,6 @@
 {
   "name": "NIMSDK",
-  "version": "8.3.001",
+  "version": "8.3.002",
   "summary": "Netease IM SDK",
   "homepage": "http://netease.im",
   "license": {
@@ -35,9 +35,9 @@
   ],
   "resources": "**/Resources/NMCVideoFilter.bundle",
   "pod_target_xcconfig": {
-    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "arm64"
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "i386 arm64"
   },
   "user_target_xcconfig": {
-    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "arm64"
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "i386 arm64"
   }
 }
