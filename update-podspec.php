@@ -44,7 +44,7 @@ class UpdatePodspec
         $spec = json_decode($spec, true);
         $spec['version'] = $this->newVersion;
         $spec = $this->replacePodSource($spec);
-        $spec = $this->addXcodeConfig($spec);
+        // $spec = $this->addXcodeConfig($spec);
 
         $json = $this->encodePodspecToJSON($spec);
         file_put_contents(__DIR__.'/'.$this->filename, $json.PHP_EOL);
