@@ -40,8 +40,7 @@ class UpdatePodspec
     {
         echo "Updating {$this->name} {$this->version} -> {$this->newVersion}".PHP_EOL;
 
-        $spec = $this->fetchPodspec();
-        $spec = json_decode($spec, true);
+        $spec = $this->fetchPodspec(true);
         $spec['version'] = $this->newVersion;
         $spec = $this->replacePodSource($spec);
         // $spec = $this->addXcodeConfig($spec);
@@ -92,18 +91,27 @@ class UpdatePodspec
         return implode('.', $parts);
     }
 
-    protected function fetchPodspec()
+    protected function fetchPodspec($decodeToArray = false)
     {
         $url = 'https://raw.githubusercontent.com/CocoaPods/Specs/master/Specs/'
             .$this->podNameShard($this->name, '/')
             .'/'.implode('/', [$this->name, $this->version, $this->filename]);
+        $data = $this->request($url);
 
-        if ($data = $this->request($url)) {
-            return $data;
+        if (! $data) {
+            echo "Failed to fetch podspec from $url".PHP_EOL;
+            exit(11);
         }
 
-        echo "Failed to fetch podspec from $url".PHP_EOL;
-        exit(11);
+        if ($decodeToArray) {
+            $data = json_decode($data, true);
+            if (! is_array($data)) {
+                echo 'Could not decode podspec'.PHP_EOL;
+                exit(12);
+            }
+        }
+
+        return $data;
     }
 
     /**
