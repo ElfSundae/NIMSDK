@@ -35,12 +35,7 @@ class UpdatePodspec
         $this->version = $version ?: $this->fetchPodLatestVersion($this->name);
         $this->newVersion = $newVersion ?: $this->patchVersion($this->version);
         $this->filename = $this->name.'.podspec.json';
-        $this->createWorkingDir();
-    }
-
-    public function __destruct()
-    {
-        $this->deleteWorkingDir();
+        $this->createDir($this->workingDir = __DIR__.'/working');
     }
 
     public function update()
@@ -48,6 +43,10 @@ class UpdatePodspec
         echo "Updating {$this->name} {$this->version} -> {$this->newVersion}".PHP_EOL;
 
         $spec = $this->fetchPodspec(true);
+        $this->buildForPodspec($spec);
+
+        exit;
+
         $spec['version'] = $this->newVersion;
         $spec = $this->replacePodSource($spec);
         // $spec = $this->addXcodeConfig($spec);
@@ -56,23 +55,16 @@ class UpdatePodspec
         file_put_contents(__DIR__.'/'.$this->filename, $json.PHP_EOL);
     }
 
-    protected function createWorkingDir()
+    protected function createDir($dir)
     {
-        $this->workingDir = sys_get_temp_dir().DIRECTORY_SEPARATOR
-            .$this->name.'-working';
-        $this->deleteWorkingDir();
-        mkdir($this->workingDir);
-
-        pcntl_async_signals(true);
-
-        foreach ([SIGINT, SIGTERM, SIGHUP] as $signo) {
-            pcntl_signal($signo, [$this, 'deleteWorkingDir']);
-        }
+        return is_dir($dir) ?: mkdir($dir, 0777, true);
     }
 
-    protected function deleteWorkingDir()
+    protected function deletePath($path)
     {
-        exec('rm -rf "'.$this->workingDir.'"');
+        system('rm -rf "'.$path.'"', $ret);
+
+        return $ret === 0;
     }
 
     protected function fetchPodLatestVersion($name)
@@ -187,6 +179,41 @@ class UpdatePodspec
         }
 
         return $data;
+    }
+
+    protected function buildForPodspec($spec)
+    {
+        $root = $this->downloadPodSource($spec);
+        echo $root.PHP_EOL;
+    }
+
+    /**
+     * Download and extract the pod source zip file.
+     *
+     * @param  array  $spec
+     * @return string
+     */
+    protected function downloadPodSource($spec)
+    {
+        $url = $spec['source']['http'];
+        $basename = basename(parse_url($url, PHP_URL_PATH));
+        $to = $this->workingDir.'/'.$basename;
+        echo "Downloading $url to $to...".PHP_EOL;
+        if (! $this->request($url, $to)) {
+            echo 'Downloading failed.'.PHP_EOL;
+            exit(11);
+        }
+
+        $pathinfo = pathinfo($to);
+        $path = $pathinfo['dirname'].'/'.$pathinfo['filename'];
+        echo "Extracting $basename...".PHP_EOL;
+        system(sprintf('unzip -q "%s" -d "%s"', $to, $path), $ret);
+        if ($ret !== 0) {
+            echo 'Failed to extract.'.PHP_EOL;
+            exit(12);
+        }
+
+        return $path;
     }
 
     /**
