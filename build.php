@@ -34,6 +34,11 @@ class Helper
         return is_dir($dir) ?: mkdir($dir, 0777, true);
     }
 
+    public static function createNewDir($dir)
+    {
+        return static::deletePath($dir) ? static::createDir($dir) : false;
+    }
+
     /**
      * Delete a file or directory.
      *
@@ -42,7 +47,7 @@ class Helper
      */
     public static function deletePath($path)
     {
-        system('rm -rf "'.$path.'"', $ret);
+        exec('rm -rf "'.$path.'"', $output, $ret);
 
         return $ret === 0;
     }
@@ -141,12 +146,137 @@ class Helper
         $pathinfo = pathinfo($file);
         $path = $pathinfo['dirname'].'/'.$pathinfo['filename'];
         static::deletePath($path);
-        system(sprintf('unzip -q "%s" -d "%s"', $file, $path), $ret);
+        exec(sprintf('unzip -q "%s" -d "%s"', $file, $path), $output, $ret);
         if ($ret !== 0) {
             return false;
         }
 
         return $path;
+    }
+
+    /**
+     * Create a xcframework from the given binary framework file.
+     *
+     * @param  string  $framework
+     * @return string|false
+     */
+    public static function createXcframeworkFromFramework($framework)
+    {
+        if (! is_file($framework.'/Info.plist')) {
+            return false;
+        }
+
+        // Strip fat framework
+        $platforms = ['iphoneos', 'iphonesimulator'];
+        $frameworks = array_filter(
+            array_map(function ($platform) use ($framework) {
+                return static::stripFramework($framework, $platform);
+            }, $platforms)
+        );
+        if (count($platforms) != count($frameworks)) {
+            return false;
+        }
+
+        // Create xcframework
+        $pathinfo = pathinfo($framework);
+        $xcframework = $pathinfo['dirname'].'/'.$pathinfo['filename'].'.xcframework';
+        $cmd = sprintf(
+            'xcodebuild -create-xcframework -framework %s -output "%s"',
+            implode(' -framework ', $frameworks),
+            $xcframework
+        );
+        exec($cmd, $output, $ret);
+        foreach ($frameworks as $path) {
+            static::deletePath(dirname($path));
+        }
+        if ($ret !== 0) {
+            return false;
+        }
+
+        return $xcframework;
+    }
+
+    protected static function stripFramework($framework, $platform)
+    {
+        if (! ($validArchs = static::validArchsForPlatform($platform))) {
+            return false;
+        }
+
+        $root = $framework.'-'.$platform;
+        if (! static::createNewDir($root)) {
+            return false;
+        }
+
+        exec(sprintf('cp -a "%s" "%s/"', $framework, $root), $output, $ret);
+        if ($ret !== 0) {
+            static::deletePath($root);
+
+            return false;
+        }
+
+        $newFramework = $root.'/'.basename($framework);
+        $binary = $newFramework.'/'.pathinfo($newFramework, PATHINFO_FILENAME);
+        if (! is_file($binary)) {
+            static::deletePath($root);
+
+            return false;
+        }
+
+        $currentArchs = static::getArchsForFile($binary);
+        $removeArchs = array_diff($currentArchs, $validArchs);
+
+        if ($removeArchs) {
+            $cmd = sprintf(
+                'xcrun lipo -remove %s "%s" -o "%s"',
+                implode(' -remove ', $removeArchs), $binary, $binary
+            );
+            exec($cmd, $output, $ret);
+            if ($ret !== 0) {
+                static::deletePath($root);
+
+                return false;
+            }
+        }
+
+        return $newFramework;
+    }
+
+    /**
+     * Returns all valid architectures for the platform.
+     *
+     * @param  string  $platform
+     * @return array
+     */
+    protected static function validArchsForPlatform($platform)
+    {
+        switch ($platform) {
+            case 'iphoneos':
+                return ['armv6', 'armv7', 'armv7s', 'armv8', 'arm64', 'arm64e'];
+
+            case 'iphonesimulator':
+                return ['i386', 'x86_64'];
+
+            default:
+                return [];
+        }
+    }
+
+    /**
+     * Get architectures for the file.
+     *
+     * @param  string  $file
+     * @return array
+     */
+    protected static function getArchsForFile($file)
+    {
+        $archs = exec('xcrun lipo -archs "'.$file.'"', $output, $ret);
+        if ($ret !== 0) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map('trim', explode(' ', $archs))
+        ));
     }
 }
 
@@ -173,7 +303,7 @@ class Builder
         $spec = $this->fetchPodspec($this->name, $this->version, true);
         $this->buildForPodspec($spec);
 
-        exit;
+        return;
 
         $spec['version'] = $this->newVersion;
         $spec = $this->replacePodSource($spec);
@@ -248,7 +378,27 @@ class Builder
 
     protected function buildForPodspec($spec)
     {
-        $root = $this->downloadPodSource($spec);
+        $src = $this->downloadPodSource($spec);
+
+        foreach (glob($src.'/*/*.framework') as $framework) {
+            echo 'Converting '.basename($framework).' to xcframework...';
+            $xcframework = Helper::createXcframeworkFromFramework($framework);
+            if (! $xcframework) {
+                echo 'failed'.PHP_EOL;
+                Helper::deletePath($src);
+                exit(14);
+            } else {
+                echo 'done'.PHP_EOL;
+            }
+            Helper::deletePath($framework);
+        }
+
+        $dist = __DIR__.'/'.$this->name;
+        Helper::deletePath($dist);
+        if (! rename($src, $dist)) {
+            echo 'Error: could not move directory.'.PHP_EOL;
+            Helper::deletePath($src);
+        }
     }
 
     /**
