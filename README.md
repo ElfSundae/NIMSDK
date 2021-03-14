@@ -1,3 +1,10 @@
+# New repositories:
+
+ - [NIMSDK_LITE](https://ssl.coding.net/public/XCFrameworks/NIMSDK_LITE/git/files)
+ - [NIMSDK](https://ssl.coding.net/public/XCFrameworks/NIMSDK/git/files)
+
+---
+
 # NIMSDK
 
 [![Build status](https://github.com/ElfSundae/NIMSDK/workflows/Build/badge.svg)](https://github.com/ElfSundae/NIMSDK/actions?query=workflow%3ABuild)
