@@ -27,6 +27,7 @@ class UpdatePodspec
     protected $version;
     protected $newVersion;
     protected $filename;
+    protected $workingDir;
 
     public function __construct($name, $version, $newVersion = null)
     {
@@ -34,6 +35,12 @@ class UpdatePodspec
         $this->version = $version ?: $this->fetchPodLatestVersion($this->name);
         $this->newVersion = $newVersion ?: $this->patchVersion($this->version);
         $this->filename = $this->name.'.podspec.json';
+        $this->createWorkingDir();
+    }
+
+    public function __destruct()
+    {
+        $this->deleteWorkingDir();
     }
 
     public function update()
@@ -47,6 +54,25 @@ class UpdatePodspec
 
         $json = $this->encodePodspecToJSON($spec);
         file_put_contents(__DIR__.'/'.$this->filename, $json.PHP_EOL);
+    }
+
+    protected function createWorkingDir()
+    {
+        $this->workingDir = sys_get_temp_dir().DIRECTORY_SEPARATOR
+            .$this->name.'-working';
+        $this->deleteWorkingDir();
+        mkdir($this->workingDir);
+
+        pcntl_async_signals(true);
+
+        foreach ([SIGINT, SIGTERM, SIGHUP] as $signo) {
+            pcntl_signal($signo, [$this, 'deleteWorkingDir']);
+        }
+    }
+
+    protected function deleteWorkingDir()
+    {
+        exec('rm -rf "'.$this->workingDir.'"');
     }
 
     protected function fetchPodLatestVersion($name)
