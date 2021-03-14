@@ -21,12 +21,140 @@ foreach (['NIMSDK', 'NIMSDK_LITE'] as $name) {
     (new Builder($name, $version, $newVersion))->run();
 }
 
+class Helper
+{
+    /**
+     * Create a directory.
+     *
+     * @param  string  $dir
+     * @return bool
+     */
+    public static function createDir($dir)
+    {
+        return is_dir($dir) ?: mkdir($dir, 0777, true);
+    }
+
+    /**
+     * Delete a file or directory.
+     *
+     * @param  string  $path
+     * @return bool
+     */
+    public static function deletePath($path)
+    {
+        system('rm -rf "'.$path.'"', $ret);
+
+        return $ret === 0;
+    }
+
+    /**
+     * Request the URL, return the response content or save the response content
+     * to the given file path.
+     *
+     * @param  string  $url
+     * @param  null|string  $path
+     * @param  bool  $progress
+     * @return string|bool  Return `false` if request failed.
+     */
+    public static function request($url, $path = null, $progress = false)
+    {
+        $options = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FAILONERROR => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_CONNECTTIMEOUT => 30,
+        ];
+
+        if ($path) {
+            $fp = fopen($path, 'w');
+            if ($fp === false) {
+                return false;
+            }
+            $options[CURLOPT_FILE] = $fp;
+
+            if ($progress) {
+                $options[CURLOPT_NOPROGRESS] = false;
+            }
+        }
+
+        $ch = curl_init();
+        if ($ch === false) {
+            return false;
+        }
+        curl_setopt_array($ch, $options);
+        $data = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if (curl_errno($ch) || $code < 200 || $code >= 300) {
+            $data = false;
+        }
+        curl_close($ch);
+
+        if (isset($options[CURLOPT_FILE])) {
+            fclose($options[CURLOPT_FILE]);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Download a file from the URL.
+     *
+     * @param  string  $url
+     * @param  string  $path
+     * @param  bool  $overwrite
+     * @param  bool  $progress
+     * @return bool
+     */
+    public static function downloadFile($url, $path, $progress = true, $overwrite = false)
+    {
+        if (is_file($path)) {
+            if ($overwrite) {
+                static::deletePath($path);
+            } else {
+                return true;
+            }
+        }
+
+        $tmp = $path.'.downloading';
+        if (! static::request($url, $tmp, $progress)) {
+            return false;
+        }
+        if (! rename($tmp, $path)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Extract a file.
+     *
+     * @param  string  $file
+     * @return string|false
+     */
+    public static function extractFile($file)
+    {
+        $pathinfo = pathinfo($file);
+        $path = $pathinfo['dirname'].'/'.$pathinfo['filename'];
+        static::deletePath($path);
+        system(sprintf('unzip -q "%s" -d "%s"', $file, $path), $ret);
+        if ($ret !== 0) {
+            return false;
+        }
+
+        return $path;
+    }
+}
+
 class Builder
 {
     protected $name;
     protected $version;
     protected $newVersion;
-    protected $filename;
     protected $workingDir;
 
     public function __construct($name, $version, $newVersion = null)
@@ -34,15 +162,15 @@ class Builder
         $this->name = $name;
         $this->version = $version ?: $this->fetchPodLatestVersion($this->name);
         $this->newVersion = $newVersion ?: $this->patchVersion($this->version);
-        $this->filename = $this->name.'.podspec.json';
-        $this->createDir($this->workingDir = __DIR__.'/working');
+
+        Helper::createDir($this->workingDir = __DIR__.'/working');
     }
 
     public function run()
     {
         echo "Build {$this->name} {$this->version} -> {$this->newVersion}".PHP_EOL;
 
-        $spec = $this->fetchPodspec(true);
+        $spec = $this->fetchPodspec($this->name, $this->version, true);
         $this->buildForPodspec($spec);
 
         exit;
@@ -52,19 +180,7 @@ class Builder
         // $spec = $this->addXcodeConfig($spec);
 
         $json = $this->encodePodspecToJSON($spec);
-        file_put_contents(__DIR__.'/'.$this->filename, $json.PHP_EOL);
-    }
-
-    protected function createDir($dir)
-    {
-        return is_dir($dir) ?: mkdir($dir, 0777, true);
-    }
-
-    protected function deletePath($path)
-    {
-        system('rm -rf "'.$path.'"', $ret);
-
-        return $ret === 0;
+        file_put_contents(__DIR__.'/'.$this->name.'.podspec.json', $json.PHP_EOL);
     }
 
     protected function fetchPodLatestVersion($name)
@@ -73,7 +189,7 @@ class Builder
 
         $versionsURL = 'https://cdn.cocoapods.org/all_pods_versions_'
             .$this->podNameShard($name, '_').'.txt';
-        $versions = $this->request($versionsURL);
+        $versions = Helper::request($versionsURL);
         if ($versions === false) {
             echo 'request failed'.PHP_EOL;
             exit(11);
@@ -107,12 +223,12 @@ class Builder
         return implode('.', $parts);
     }
 
-    protected function fetchPodspec($decodeToArray = false)
+    protected function fetchPodspec($name, $version, $decodeToArray = false)
     {
         $url = 'https://raw.githubusercontent.com/CocoaPods/Specs/master/Specs/'
-            .$this->podNameShard($this->name, '/')
-            .'/'.implode('/', [$this->name, $this->version, $this->filename]);
-        $data = $this->request($url);
+            .$this->podNameShard($name, '/')
+            .'/'.implode('/', [$name, $version, $name.'.podspec.json']);
+        $data = Helper::request($url);
 
         if (! $data) {
             echo "Failed to fetch podspec from $url".PHP_EOL;
@@ -130,59 +246,9 @@ class Builder
         return $data;
     }
 
-    /**
-     * Request the URL, return the response content or save the response to the
-     * given file path.
-     *
-     * @param  string  $url
-     * @param  null|string  $path
-     * @return string|bool  Return `false` if request failed.
-     */
-    protected function request($url, $path = null)
-    {
-        $options = [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FAILONERROR => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 5,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_CONNECTTIMEOUT => 30,
-        ];
-
-        if ($path) {
-            $fp = fopen($path, 'w');
-            if ($fp === false) {
-                return false;
-            }
-
-            $options[CURLOPT_FILE] = $fp;
-            $options[CURLOPT_NOPROGRESS] = false;
-        }
-
-        $ch = curl_init();
-        if ($ch === false) {
-            return false;
-        }
-        curl_setopt_array($ch, $options);
-        $data = curl_exec($ch);
-        if (curl_errno($ch) || curl_getinfo($ch, CURLINFO_HTTP_CODE) != 200) {
-            $data = false;
-        }
-        curl_close($ch);
-
-        if (isset($options[CURLOPT_FILE])) {
-            fclose($options[CURLOPT_FILE]);
-        }
-
-        return $data;
-    }
-
     protected function buildForPodspec($spec)
     {
         $root = $this->downloadPodSource($spec);
-        echo $root.PHP_EOL;
     }
 
     /**
@@ -194,21 +260,22 @@ class Builder
     protected function downloadPodSource($spec)
     {
         $url = $spec['source']['http'];
-        $basename = basename(parse_url($url, PHP_URL_PATH));
-        $to = $this->workingDir.'/'.$basename;
+        $pathinfo = pathinfo(parse_url($url, PHP_URL_PATH));
+        $to = $this->workingDir.'/'.$pathinfo['filename'].'-'.md5($url)
+            .'.'.$pathinfo['extension'];
+
         echo "Downloading $url to $to...".PHP_EOL;
-        if (! $this->request($url, $to)) {
-            echo 'Downloading failed.'.PHP_EOL;
+        if (! Helper::downloadFile($url, $to)) {
+            echo 'Download failed.'.PHP_EOL;
             exit(11);
         }
 
-        $pathinfo = pathinfo($to);
-        $path = $pathinfo['dirname'].'/'.$pathinfo['filename'];
-        echo "Extracting $basename...".PHP_EOL;
-        system(sprintf('unzip -q "%s" -d "%s"', $to, $path), $ret);
-        if ($ret !== 0) {
-            echo 'Failed to extract.'.PHP_EOL;
-            exit(12);
+        echo 'Extracting '.basename($to).'...';
+        $path = Helper::extractFile($to);
+        if ($path === false) {
+            echo 'failed'.PHP_EOL;
+        } else {
+            echo 'done'.PHP_EOL;
         }
 
         return $path;
