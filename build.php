@@ -18,10 +18,10 @@ if ($argc > 1) {
 }
 
 foreach (['NIMSDK', 'NIMSDK_LITE'] as $name) {
-    (new UpdatePodspec($name, $version, $newVersion))->update();
+    (new Builder($name, $version, $newVersion))->run();
 }
 
-class UpdatePodspec
+class Builder
 {
     protected $name;
     protected $version;
@@ -38,9 +38,9 @@ class UpdatePodspec
         $this->createDir($this->workingDir = __DIR__.'/working');
     }
 
-    public function update()
+    public function run()
     {
-        echo "Updating {$this->name} {$this->version} -> {$this->newVersion}".PHP_EOL;
+        echo "Build {$this->name} {$this->version} -> {$this->newVersion}".PHP_EOL;
 
         $spec = $this->fetchPodspec(true);
         $this->buildForPodspec($spec);
@@ -84,9 +84,7 @@ class UpdatePodspec
             exit(2);
         }
 
-        $version = array_pop($matches);
-
-        echo $version.PHP_EOL;
+        echo $version = array_pop($matches), PHP_EOL;
 
         return $version;
     }
