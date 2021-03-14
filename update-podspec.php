@@ -32,7 +32,7 @@ class UpdatePodspec
     {
         $this->name = $name;
         $this->version = $version ?: $this->fetchPodLatestVersion($this->name);
-        $this->newVersion = $newVersion ?: $this->patchedVersion($this->version);
+        $this->newVersion = $newVersion ?: $this->patchVersion($this->version);
         $this->filename = $this->name.'.podspec.json';
     }
 
@@ -55,12 +55,18 @@ class UpdatePodspec
         echo "Fetching the latest version for pod $name...";
 
         $versionsURL = 'https://cdn.cocoapods.org/all_pods_versions_'
-            .$this->getPodSpecShard($name, '_').'.txt';
-        $versions = $this->downloadContent($versionsURL);
+            .$this->podNameShard($name, '_').'.txt';
+        $versions = $this->request($versionsURL);
+        if ($versions === false) {
+            echo 'request failed'.PHP_EOL;
+            exit(11);
+        }
+
         if (! preg_match('#^'.$name.'(/.+)?/([\d.]+)$#m', $versions, $matches)) {
-            echo 'error'.PHP_EOL;
+            echo 'error parsing pods versions index'.PHP_EOL;
             exit(2);
         }
+
         $version = array_pop($matches);
 
         echo $version.PHP_EOL;
@@ -68,12 +74,12 @@ class UpdatePodspec
         return $version;
     }
 
-    protected function getPodSpecShard($name, $seprator = '/')
+    protected function podNameShard($name, $seprator = '/')
     {
         return implode($seprator, str_split(substr(md5($name), 0, 3)));
     }
 
-    protected function patchedVersion($version)
+    protected function patchVersion($version)
     {
         $parts = explode('.', $version);
         $lastNumber = array_pop($parts);
@@ -89,32 +95,62 @@ class UpdatePodspec
     protected function fetchPodspec()
     {
         $url = 'https://raw.githubusercontent.com/CocoaPods/Specs/master/Specs/'
-            .$this->getPodSpecShard($this->name, '/')
+            .$this->podNameShard($this->name, '/')
             .'/'.implode('/', [$this->name, $this->version, $this->filename]);
 
-        if ($data = $this->downloadContent($url)) {
+        if ($data = $this->request($url)) {
             return $data;
         }
 
         echo "Failed to fetch podspec from $url".PHP_EOL;
-        exit(3);
+        exit(11);
     }
 
-    protected function downloadContent($url)
+    /**
+     * Request the URL, return the response content or save the response to the
+     * given file path.
+     *
+     * @param  string  $url
+     * @param  null|string  $path
+     * @return string|bool  Return `false` if request failed.
+     */
+    protected function request($url, $path = null)
     {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        $data = curl_exec($ch);
+        $options = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FAILONERROR => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_CONNECTTIMEOUT => 30,
+        ];
 
+        if ($path) {
+            $fp = fopen($path, 'w');
+            if ($fp === false) {
+                return false;
+            }
+
+            $options[CURLOPT_FILE] = $fp;
+            $options[CURLOPT_NOPROGRESS] = false;
+        }
+
+        $ch = curl_init();
+        if ($ch === false) {
+            return false;
+        }
+        curl_setopt_array($ch, $options);
+        $data = curl_exec($ch);
         if (curl_errno($ch) || curl_getinfo($ch, CURLINFO_HTTP_CODE) != 200) {
             $data = false;
         }
-
         curl_close($ch);
+
+        if (isset($options[CURLOPT_FILE])) {
+            fclose($options[CURLOPT_FILE]);
+        }
 
         return $data;
     }
